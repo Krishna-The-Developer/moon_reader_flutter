@@ -1,4 +1,6 @@
+import 'package:file_picker/file_picker.dart';
 import 'dart:io';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../models/book_model.dart';
@@ -220,7 +222,7 @@ class _BookshelfScreenState extends State<BookshelfScreen> {
       backgroundColor: const Color(0xFF19120C),
       appBar: AppBar(
         backgroundColor: const Color(0xFF281C13),
-        title: const Text('My Wooden Library', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('My Library', style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
           IconButton(
             icon: Icon(_spineMode ? Icons.view_module : Icons.view_column),

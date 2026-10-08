@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:archive/archive.dart';
 import 'package:epubx/epubx.dart' as epub;
+import 'package:pdfx/pdfx.dart';
 
 class ParsedBookContent {
   final List<String> textChunks;
@@ -42,7 +43,7 @@ class FormatLoader {
       return ParsedBookContent(textChunks: [], imagePages: images, isImageBook: true);
     }
 
-    // 2. EPUB
+    // 2. EPUB (Clean text extraction without HTML/CSS junk)
     if (format == 'epub') {
       final bytes = await file.readAsBytes();
       final book = await epub.EpubReader.readBook(bytes);
@@ -72,30 +73,37 @@ class FormatLoader {
       return ParsedBookContent(textChunks: paragraphs, imagePages: [], isImageBook: false);
     }
 
-    // 3. PDF Text Stream Parser
+    // 3. PDF Native Visual Rendering via PDFX (Crisp pages, zero gibberish)
     if (format == 'pdf') {
-      final bytes = await file.readAsBytes();
-      final buffer = StringBuffer();
-      final content =
-          String.fromCharCodes(bytes.where((b) => (b >= 32 && b <= 126) || b == 10 || b == 13));
-
-      // Fixed Regex: Clean double-quoted raw string
-      final regex = RegExp(r"\(([^)]+)\)");
-      for (final m in regex.allMatches(content)) {
-        final str = m.group(1);
-        if (str != null && str.trim().isNotEmpty) {
-          buffer.write('$str ');
+      try {
+        final document = await PdfDocument.openFile(path);
+        final List<Uint8List> pages = [];
+        final count = document.pagesCount;
+        for (int i = 1; i <= count; i++) {
+          final page = await document.getPage(i);
+          final pageImage = await page.render(
+            width: page.width * 2,
+            height: page.height * 2,
+            format: PdfPageImageFormat.jpeg,
+            backgroundColor: '#FFFFFF',
+          );
+          if (pageImage != null) {
+            pages.add(pageImage.bytes);
+          }
+          await page.close();
         }
-      }
+        await document.close();
 
-      final extracted = buffer.toString().trim();
-      final List<String> chunks = [];
-      if (extracted.isNotEmpty) {
-        _splitIntoChunks(extracted, chunks);
-      } else {
-        chunks.add("PDF: ${file.uri.pathSegments.last}\n\nPure text streams could not be parsed.\n(For best reading experience on Kali, use EPUB, TXT, or CBZ format).");
-      }
-      return ParsedBookContent(textChunks: chunks, imagePages: [], isImageBook: false);
+        if (pages.isNotEmpty) {
+          return ParsedBookContent(textChunks: [], imagePages: pages, isImageBook: true);
+        }
+      } catch (_) {}
+
+      return ParsedBookContent(
+        textChunks: ["Could not parse PDF pages: ${file.uri.pathSegments.last}"],
+        imagePages: [],
+        isImageBook: false,
+      );
     }
 
     // 4. Plain Text (TXT)
@@ -116,6 +124,8 @@ class FormatLoader {
 
   static String _stripHtml(String html) {
     return html
+        .replaceAll(RegExp(r'<style[^>]*>[\s\S]*?</style>', caseSensitive: false), '')
+        .replaceAll(RegExp(r'<script[^>]*>[\s\S]*?</script>', caseSensitive: false), '')
         .replaceAll(RegExp(r'<[^>]*>'), ' ')
         .replaceAll('&nbsp;', ' ')
         .replaceAll('&amp;', '&')
@@ -123,6 +133,7 @@ class FormatLoader {
         .replaceAll('&apos;', "'")
         .replaceAll('&lt;', '<')
         .replaceAll('&gt;', '>')
+        .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
   }
 
