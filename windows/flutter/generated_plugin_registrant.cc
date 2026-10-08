@@ -8,13 +8,13 @@
 
 #include <flutter_tts/flutter_tts_plugin.h>
 #include <pdfx/pdfx_plugin.h>
-#include <url_launcher_windows/url_launcher_windows.h>
+#include <permission_handler_windows/permission_handler_windows_plugin.h>
 
 void RegisterPlugins(flutter::PluginRegistry* registry) {
   FlutterTtsPluginRegisterWithRegistrar(
       registry->GetRegistrarForPlugin("FlutterTtsPlugin"));
   PdfxPluginRegisterWithRegistrar(
       registry->GetRegistrarForPlugin("PdfxPlugin"));
-  UrlLauncherWindowsRegisterWithRegistrar(
-      registry->GetRegistrarForPlugin("UrlLauncherWindows"));
+  PermissionHandlerWindowsPluginRegisterWithRegistrar(
+      registry->GetRegistrarForPlugin("PermissionHandlerWindowsPlugin"));
 }

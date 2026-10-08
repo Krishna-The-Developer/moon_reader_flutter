@@ -5,8 +5,8 @@ plugins {
 
 android {
     namespace = "com.local.moonreader.moon_reader_flutter"
-    compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    compileSdk = 36
+    ndkVersion = "26.1.10909125"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -15,8 +15,8 @@ android {
 
     defaultConfig {
         applicationId = "com.local.moonreader.moon_reader_flutter"
-        minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
+        minSdk = 24
+        targetSdk = 34
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }

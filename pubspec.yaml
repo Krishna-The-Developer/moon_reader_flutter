@@ -14,17 +14,17 @@ dependencies:
   # UI & Icons
   cupertino_icons: ^1.0.8
 
-  # Book Reading & Audio (TTS)
+  # Book Reading, Formats & Audio (TTS)
   pdfx: ^2.6.0
   flutter_tts: ^4.1.0
   archive: ^3.6.1
   epubx: ^4.0.0
 
-  # Database & State (Required by book_model & bookshelf)
+  # Local Storage & Database
   hive: ^2.2.3
   hive_flutter: ^1.1.0
 
-  # File Picking & Storage
+  # File Access & Settings
   file_picker: ^8.1.2
   path_provider: ^2.1.4
   shared_preferences: ^2.2.3
