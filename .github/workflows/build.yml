@@ -25,10 +25,15 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Set up Android SDK 36 & NDK 28
+      - name: Install Android SDK 36 & NDK 28
         run: |
           yes | flutter doctor --android-licenses || true
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-36" "build-tools;36.0.0" "ndk;28.2.13676358" || true
+
+      - name: Verify Android Configuration
+        run: |
+          echo "=== Checking build.gradle.kts values ==="
+          grep -n "compileSdk\|ndkVersion" android/app/build.gradle.kts
 
       - name: Install Dependencies
         run: flutter pub get
