@@ -18,7 +18,7 @@ subprojects {
 }
 
 subprojects {
-    if (project.name != "app" && !project.state.executed) {
+    if (project.name != "app") {
         afterEvaluate {
             if (project.hasProperty("android")) {
                 val androidExt = project.extensions.findByName("android")
