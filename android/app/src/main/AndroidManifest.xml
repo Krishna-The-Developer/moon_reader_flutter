@@ -4,7 +4,7 @@
         <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="28"/>
     <application
         android:requestLegacyExternalStorage="true"
-        android:label="moon_reader_flutter"
+        android:label="AK reader"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

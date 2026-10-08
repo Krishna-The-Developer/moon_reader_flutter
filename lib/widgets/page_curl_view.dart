@@ -264,9 +264,10 @@ class _RealisticPageCurlState extends State<RealisticPageCurl>
     Widget targetWidget,
   ) {
     final isForward = _turnDir == TurnDirection.forward;
+    // Positive angle rotates Z towards viewer (pops outward in front of book)
     final angle = isForward
-        ? -progress * math.pi
-        : (1.0 - progress) * -math.pi;
+        ? progress * math.pi
+        : (1.0 - progress) * math.pi;
 
     return Stack(
       fit: StackFit.expand,
@@ -293,9 +294,9 @@ class _RealisticPageCurlState extends State<RealisticPageCurl>
           ),
 
         Transform(
-          alignment: isForward ? Alignment.centerLeft : Alignment.centerRight,
+          alignment: Alignment.centerLeft,
           transform: Matrix4.identity()
-            ..setEntry(3, 2, 0.0012)
+            ..setEntry(3, 2, 0.0009)
             ..rotateY(angle),
           child: currWidget,
         ),
