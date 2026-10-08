@@ -1,6 +1,5 @@
 import 'package:file_picker/file_picker.dart';
 import 'dart:io';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../models/book_model.dart';
@@ -24,25 +23,38 @@ class _BookshelfScreenState extends State<BookshelfScreen> {
     String? selectedPath;
 
     // 1. Pehle Linux native Zenity file picker try karega
-    try {
-      final result = await Process.run('zenity', [
-        '--file-selection',
-        '--title=Select E-Book (EPUB, CBZ, TXT, PDF)',
-      ]);
+    // 1. Android & Mobile Native File Picker + Permissions
+    if (Platform.isAndroid || Platform.isIOS) {
 
-      if (result.exitCode == 0) {
-        final path = result.stdout.toString().trim();
-        if (path.isNotEmpty && File(path).existsSync()) {
-          selectedPath = path;
+      try {
+        final result = await FilePicker.platform.pickFiles(
+          type: FileType.custom,
+          allowedExtensions: ["pdf", "epub", "cbz", "txt"],
+        );
+        if (result != null && result.files.isNotEmpty) {
+          selectedPath = result.files.single.path;
         }
+      } catch (e) {
+        debugPrint("FilePicker error: $e");
       }
-    } catch (_) {
-      // Zenity nahi mila
-    }
+    } else {
+      // 2. Desktop fallback (Linux)
+      try {
+        final result = await Process.run("zenity", [
+          "--file-selection",
+          "--title=Select E-Book (EPUB, CBZ, TXT, PDF)",
+        ]);
+        if (result.exitCode == 0) {
+          final path = result.stdout.toString().trim();
+          if (path.isNotEmpty && File(path).existsSync()) {
+            selectedPath = path;
+          }
+        }
+      } catch (_) {}
 
-    // 2. Agar Zenity nahi chala, toh In-App Folder Picker Dialog khulega
-    if (selectedPath == null && mounted) {
-      selectedPath = await _showInAppFilePicker(context);
+      if (selectedPath == null && mounted) {
+        selectedPath = await _showInAppFilePicker(context);
+      }
     }
 
     // 3. File select hone par book scan karke shelf me add karega
@@ -52,6 +64,7 @@ class _BookshelfScreenState extends State<BookshelfScreen> {
       final box = Hive.box<LocalBook>('bookshelf');
       await box.put(scannedBook.id, scannedBook);
 
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Added "${scannedBook.title}" to bookshelf!'),
@@ -136,7 +149,7 @@ class _BookshelfScreenState extends State<BookshelfScreen> {
                             onTap: () {
                               if (isDir) {
                                 setDialogState(() {
-                                  currentDir = item as Directory;
+                                  currentDir = item;
                                 });
                               } else {
                                 Navigator.pop(ctx, item.path);

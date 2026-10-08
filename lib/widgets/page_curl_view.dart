@@ -22,7 +22,6 @@ class RealisticPageCurl extends StatefulWidget {
 class _RealisticPageCurlState extends State<RealisticPageCurl> with SingleTickerProviderStateMixin {
   late int _currentPage;
   double _dragOffset = 0.0;
-  bool _isDragging = false;
   late AnimationController _animController;
   late Animation<double> _animation;
 
@@ -41,13 +40,11 @@ class _RealisticPageCurlState extends State<RealisticPageCurl> with SingleTicker
 
   void _onHorizontalDragUpdate(DragUpdateDetails details) {
     setState(() {
-      _isDragging = true;
       _dragOffset += details.primaryDelta ?? 0;
     });
   }
 
   void _onHorizontalDragEnd(DragEndDetails details) {
-    _isDragging = false;
     final threshold = 80.0;
 
     if (_dragOffset < -threshold && _currentPage < widget.pageCount - 1) {
