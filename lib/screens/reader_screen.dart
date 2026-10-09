@@ -10,7 +10,8 @@ class ReaderScreen extends StatefulWidget {
   final LocalBook book;
   final ReadingMode initialMode;
 
-  const ReaderScreen({super.key, required this.book, this.initialMode = ReadingMode.curl3d});
+  const ReaderScreen(
+      {super.key, required this.book, this.initialMode = ReadingMode.curl3d});
 
   @override
   State<ReaderScreen> createState() => _ReaderScreenState();
@@ -26,7 +27,6 @@ class _ReaderScreenState extends State<ReaderScreen> {
   bool _loading = true;
   int _currentPage = 0;
   final Color _pageBgColor = const Color(0xFFF7F1E5); // Sepia
-  final Color _textColor = const Color(0xFF2B251F);
   Color _selectedHighlightColor = Colors.yellowAccent.withValues(alpha: 0.5);
 
   @override
@@ -39,11 +39,14 @@ class _ReaderScreenState extends State<ReaderScreen> {
   }
 
   Future<void> _loadBook() async {
-    final parsed = await FormatLoader.loadBook(widget.book.filePath, widget.book.format);
+    final parsed =
+        await FormatLoader.loadBook(widget.book.filePath, widget.book.format);
     setState(() {
       _content = parsed;
       _loading = false;
-      widget.book.totalPages = parsed.isImageBook ? parsed.imagePages.length : parsed.textChunks.length;
+      widget.book.totalPages = parsed.isImageBook
+          ? parsed.imagePages.length
+          : parsed.textChunks.length;
       widget.book.safeSave();
     });
   }
@@ -73,7 +76,8 @@ class _ReaderScreenState extends State<ReaderScreen> {
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF222222),
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
       builder: (ctx) {
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 16.0),
@@ -86,7 +90,8 @@ class _ReaderScreenState extends State<ReaderScreen> {
                 onTap: () {
                   Navigator.pop(ctx);
                   setState(() {
-                    final highlightKey = "$index|${_selectedHighlightColor.toARGB32()}";
+                    final highlightKey =
+                        "$index|${_selectedHighlightColor.toARGB32()}";
                     if (!widget.book.highlights.contains(highlightKey)) {
                       widget.book.highlights.add(highlightKey);
                       widget.book.safeSave();
@@ -116,7 +121,8 @@ class _ReaderScreenState extends State<ReaderScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF262626),
-        title: const Text("Edit Page Content", style: TextStyle(color: Colors.white, fontSize: 16)),
+        title: const Text("Edit Page Content",
+            style: TextStyle(color: Colors.white, fontSize: 16)),
         content: TextField(
           controller: controller,
           maxLines: 10,
@@ -124,7 +130,8 @@ class _ReaderScreenState extends State<ReaderScreen> {
           decoration: const InputDecoration(border: OutlineInputBorder()),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
           ElevatedButton(
             onPressed: () {
               setState(() {
@@ -149,7 +156,9 @@ class _ReaderScreenState extends State<ReaderScreen> {
     }
 
     final isBookmarked = widget.book.bookmarkedPages.contains(_currentPage);
-    final total = _content!.isImageBook ? _content!.imagePages.length : _content!.textChunks.length;
+    final total = _content!.isImageBook
+        ? _content!.imagePages.length
+        : _content!.textChunks.length;
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -174,10 +183,14 @@ class _ReaderScreenState extends State<ReaderScreen> {
                     onPressed: () => Navigator.pop(context),
                   ),
                   const Spacer(),
-                  _buildColorPickerDot(Colors.yellowAccent.withValues(alpha: 0.5)),
-                  _buildColorPickerDot(Colors.greenAccent.withValues(alpha: 0.5)),
-                  _buildColorPickerDot(Colors.pinkAccent.withValues(alpha: 0.5)),
-                  _buildColorPickerDot(Colors.lightBlueAccent.withValues(alpha: 0.5)),
+                  _buildColorPickerDot(
+                      Colors.yellowAccent.withValues(alpha: 0.5)),
+                  _buildColorPickerDot(
+                      Colors.greenAccent.withValues(alpha: 0.5)),
+                  _buildColorPickerDot(
+                      Colors.pinkAccent.withValues(alpha: 0.5)),
+                  _buildColorPickerDot(
+                      Colors.lightBlueAccent.withValues(alpha: 0.5)),
                   const SizedBox(width: 8),
                   IconButton(
                     icon: Icon(
@@ -190,9 +203,15 @@ class _ReaderScreenState extends State<ReaderScreen> {
                     icon: const Icon(Icons.auto_stories, color: Colors.white70),
                     onSelected: (mode) => setState(() => _currentMode = mode),
                     itemBuilder: (context) => const [
-                      PopupMenuItem(value: ReadingMode.curl3d, child: Text("3D Page Curl")),
-                      PopupMenuItem(value: ReadingMode.horizontal, child: Text("Horizontal Swipe")),
-                      PopupMenuItem(value: ReadingMode.vertical, child: Text("Vertical Scroll")),
+                      PopupMenuItem(
+                          value: ReadingMode.curl3d,
+                          child: Text("3D Page Curl")),
+                      PopupMenuItem(
+                          value: ReadingMode.horizontal,
+                          child: Text("Horizontal Swipe")),
+                      PopupMenuItem(
+                          value: ReadingMode.vertical,
+                          child: Text("Vertical Scroll")),
                     ],
                   ),
                 ],
@@ -232,24 +251,34 @@ class _ReaderScreenState extends State<ReaderScreen> {
   }
 
   Widget _buildPageContent(int index, int total) {
-    final isHighlighted = widget.book.highlights.any((h) => h.startsWith("$index|"));
+    final isHighlighted =
+        widget.book.highlights.any((h) => h.startsWith("$index|"));
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
-      color: isHighlighted ? _selectedHighlightColor : _pageBgColor,
+      padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 28),
+      color: isHighlighted ? _selectedHighlightColor : Colors.transparent,
       child: Stack(
+        fit: StackFit.expand,
         children: [
           _content!.isImageBook
-              ? Center(child: Image.memory(_content!.imagePages[index], fit: BoxFit.contain, gaplessPlayback: true, filterQuality: FilterQuality.low))
+              ? Center(
+                  child: Image.memory(
+                    _content!.imagePages[index],
+                    fit: BoxFit.contain,
+                    gaplessPlayback: true,
+                    filterQuality: FilterQuality.low,
+                  ),
+                )
               : GestureDetector(
                   onLongPress: () => _showTextActions(index),
-                  child: SelectableText(
+                  child: Text(
                     _content!.textChunks[index],
-                    style: TextStyle(
-                      fontSize: 16.5,
-                      height: 1.7,
-                      color: _textColor,
+                    style: const TextStyle(
+                      fontSize: 16.0,
+                      height: 1.65,
+                      color: Color(0xFF2B221B), // High-contrast book ink
                       fontFamily: 'serif',
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                 ),
@@ -258,7 +287,10 @@ class _ReaderScreenState extends State<ReaderScreen> {
             right: 0,
             child: Text(
               '${index + 1} / $total',
-              style: TextStyle(fontSize: 10, color: _textColor.withValues(alpha: 0.4)),
+              style: const TextStyle(
+                fontSize: 10,
+                color: Color(0x662B221B),
+              ),
             ),
           ),
         ],
@@ -277,7 +309,9 @@ class _ReaderScreenState extends State<ReaderScreen> {
           color: color.withValues(alpha: 1.0),
           shape: BoxShape.circle,
           border: Border.all(
-            color: _selectedHighlightColor.toARGB32() == color.value ? Colors.white : Colors.transparent,
+            color: _selectedHighlightColor.toARGB32() == color.toARGB32()
+                ? Colors.white
+                : Colors.transparent,
             width: 2,
           ),
         ),

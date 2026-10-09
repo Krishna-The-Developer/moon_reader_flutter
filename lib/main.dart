@@ -5,13 +5,13 @@ import 'screens/bookshelf_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // 1. Local Hive Database initialize
   await Hive.initFlutter();
-  
+
   // 2. Custom Book Model Adapter register
   Hive.registerAdapter(LocalBookAdapter());
-  
+
   // 3. Bookshelf Box open
   await Hive.openBox<LocalBook>('bookshelf');
 

@@ -25,7 +25,6 @@ class _BookshelfScreenState extends State<BookshelfScreen> {
     // 1. Pehle Linux native Zenity file picker try karega
     // 1. Android & Mobile Native File Picker + Permissions
     if (Platform.isAndroid || Platform.isIOS) {
-
       try {
         final result = await FilePicker.platform.pickFiles(
           type: FileType.custom,
@@ -100,7 +99,9 @@ class _BookshelfScreenState extends State<BookshelfScreen> {
             return AlertDialog(
               backgroundColor: const Color(0xFF221811),
               title: Text(
-                currentDir.path.split('/').last.isEmpty ? '/' : currentDir.path.split('/').last,
+                currentDir.path.split('/').last.isEmpty
+                    ? '/'
+                    : currentDir.path.split('/').last,
                 style: const TextStyle(color: Colors.white, fontSize: 16),
               ),
               content: SizedBox(
@@ -110,8 +111,10 @@ class _BookshelfScreenState extends State<BookshelfScreen> {
                   children: [
                     if (currentDir.parent.path != currentDir.path)
                       ListTile(
-                        leading: const Icon(Icons.arrow_upward, color: Colors.amber),
-                        title: const Text(".. (Go Up)", style: TextStyle(color: Colors.white70)),
+                        leading:
+                            const Icon(Icons.arrow_upward, color: Colors.amber),
+                        title: const Text(".. (Go Up)",
+                            style: TextStyle(color: Colors.white70)),
                         dense: true,
                         onTap: () {
                           setDialogState(() {
@@ -125,7 +128,9 @@ class _BookshelfScreenState extends State<BookshelfScreen> {
                         itemBuilder: (context, i) {
                           final item = items[i];
                           final isDir = item is Directory;
-                          final name = item.uri.pathSegments.where((s) => s.isNotEmpty).last;
+                          final name = item.uri.pathSegments
+                              .where((s) => s.isNotEmpty)
+                              .last;
 
                           if (!isDir) {
                             final ext = name.split('.').last.toLowerCase();
@@ -138,13 +143,16 @@ class _BookshelfScreenState extends State<BookshelfScreen> {
                             dense: true,
                             leading: Icon(
                               isDir ? Icons.folder : Icons.book,
-                              color: isDir ? Colors.amber.shade700 : Colors.lightGreenAccent,
+                              color: isDir
+                                  ? Colors.amber.shade700
+                                  : Colors.lightGreenAccent,
                             ),
                             title: Text(
                               name,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(color: isDir ? Colors.white : Colors.white70),
+                              style: TextStyle(
+                                  color: isDir ? Colors.white : Colors.white70),
                             ),
                             onTap: () {
                               if (isDir) {
@@ -165,7 +173,8 @@ class _BookshelfScreenState extends State<BookshelfScreen> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(ctx, null),
-                  child: const Text("Cancel", style: TextStyle(color: Colors.white54)),
+                  child: const Text("Cancel",
+                      style: TextStyle(color: Colors.white54)),
                 )
               ],
             );
@@ -179,7 +188,8 @@ class _BookshelfScreenState extends State<BookshelfScreen> {
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF1E1E1E),
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
       builder: (context) {
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
@@ -191,7 +201,10 @@ class _BookshelfScreenState extends State<BookshelfScreen> {
                 book.title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white),
               ),
               const SizedBox(height: 12),
               ListTile(
@@ -223,7 +236,8 @@ class _BookshelfScreenState extends State<BookshelfScreen> {
     Navigator.pop(context);
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => ReaderScreen(book: book, initialMode: mode)),
+      MaterialPageRoute(
+          builder: (_) => ReaderScreen(book: book, initialMode: mode)),
     );
   }
 
@@ -235,7 +249,8 @@ class _BookshelfScreenState extends State<BookshelfScreen> {
       backgroundColor: const Color(0xFF19120C),
       appBar: AppBar(
         backgroundColor: const Color(0xFF281C13),
-        title: const Text('My Library', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('My Library',
+            style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
           IconButton(
             icon: Icon(_spineMode ? Icons.view_module : Icons.view_column),
@@ -255,15 +270,19 @@ class _BookshelfScreenState extends State<BookshelfScreen> {
             padding: const EdgeInsets.all(12.0),
             child: TextField(
               controller: _searchCtrl,
-              onChanged: (v) => setState(() => _searchQuery = v.trim().toLowerCase()),
+              onChanged: (v) =>
+                  setState(() => _searchQuery = v.trim().toLowerCase()),
               style: const TextStyle(color: Colors.white),
               decoration: InputDecoration(
-                hintText: 'Search title or author (books pull out from shelf)...',
+                hintText:
+                    'Search title or author (books pull out from shelf)...',
                 hintStyle: const TextStyle(color: Colors.white38, fontSize: 13),
                 prefixIcon: const Icon(Icons.search, color: Colors.amber),
                 filled: true,
                 fillColor: const Color(0xFF2B1E15),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide.none),
               ),
             ),
           ),
@@ -277,9 +296,11 @@ class _BookshelfScreenState extends State<BookshelfScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.shelves, size: 70, color: Colors.white24),
+                        const Icon(Icons.shelves,
+                            size: 70, color: Colors.white24),
                         const SizedBox(height: 12),
-                        const Text("Your bookshelf is empty", style: TextStyle(color: Colors.white54)),
+                        const Text("Your bookshelf is empty",
+                            style: TextStyle(color: Colors.white54)),
                         const SizedBox(height: 8),
                         ElevatedButton.icon(
                           onPressed: _importBook,
@@ -297,7 +318,9 @@ class _BookshelfScreenState extends State<BookshelfScreen> {
                   itemCount: (books.length / itemsPerRow).ceil(),
                   itemBuilder: (context, rowIndex) {
                     final start = rowIndex * itemsPerRow;
-                    final end = (start + itemsPerRow < books.length) ? start + itemsPerRow : books.length;
+                    final end = (start + itemsPerRow < books.length)
+                        ? start + itemsPerRow
+                        : books.length;
                     final rowBooks = books.sublist(start, end);
 
                     return Column(
@@ -310,8 +333,12 @@ class _BookshelfScreenState extends State<BookshelfScreen> {
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: rowBooks.map((book) {
                               final isMatch = _searchQuery.isNotEmpty &&
-                                  (book.title.toLowerCase().contains(_searchQuery) ||
-                                      book.author.toLowerCase().contains(_searchQuery));
+                                  (book.title
+                                          .toLowerCase()
+                                          .contains(_searchQuery) ||
+                                      book.author
+                                          .toLowerCase()
+                                          .contains(_searchQuery));
                               return ShelfBookItem(
                                 book: book,
                                 isHighlighted: isMatch,
@@ -332,7 +359,12 @@ class _BookshelfScreenState extends State<BookshelfScreen> {
                               end: Alignment.bottomCenter,
                             ),
                             borderRadius: BorderRadius.circular(3),
-                            boxShadow: const [BoxShadow(color: Colors.black87, blurRadius: 10, offset: Offset(0, 8))],
+                            boxShadow: const [
+                              BoxShadow(
+                                  color: Colors.black87,
+                                  blurRadius: 10,
+                                  offset: Offset(0, 8))
+                            ],
                           ),
                         ),
                         const SizedBox(height: 35),

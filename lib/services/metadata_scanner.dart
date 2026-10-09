@@ -32,7 +32,8 @@ class MetadataScanner {
           author = epubBook.Author!.trim();
         }
 
-        if (epubBook.Content?.Images != null && epubBook.Content!.Images!.isNotEmpty) {
+        if (epubBook.Content?.Images != null &&
+            epubBook.Content!.Images!.isNotEmpty) {
           final imagesMap = epubBook.Content!.Images!;
           epub.EpubByteContentFile? coverEntry;
 
@@ -57,7 +58,10 @@ class MetadataScanner {
         final imageFiles = archive.files.where((f) {
           final n = f.name.toLowerCase();
           return f.isFile &&
-              (n.endsWith('.jpg') || n.endsWith('.png') || n.endsWith('.jpeg') || n.endsWith('.webp'));
+              (n.endsWith('.jpg') ||
+                  n.endsWith('.png') ||
+                  n.endsWith('.jpeg') ||
+                  n.endsWith('.webp'));
         }).toList()
           ..sort((a, b) => a.name.compareTo(b.name));
 
@@ -87,7 +91,8 @@ class MetadataScanner {
   }
 
   static String _cleanTitle(String raw) {
-    String name = raw.replaceAll(RegExp(r'\.[a-zA-Z0-9]+$', caseSensitive: false), '');
+    String name =
+        raw.replaceAll(RegExp(r'\.[a-zA-Z0-9]+$', caseSensitive: false), '');
     name = name.replaceAll(RegExp(r'[_+\-]'), ' ');
     return name.trim().isEmpty ? "Untitled Book" : name.trim();
   }

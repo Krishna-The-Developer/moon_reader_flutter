@@ -29,7 +29,8 @@ class _RealisticPageCurlState extends State<RealisticPageCurl>
   late AnimationController _animController;
   Animation<double>? _progressAnim;
 
-  final ValueNotifier<double> _curlProgressNotifier = ValueNotifier<double>(0.0);
+  final ValueNotifier<double> _curlProgressNotifier =
+      ValueNotifier<double>(0.0);
   final Map<int, Widget> _pageWidgetCache = {};
 
   TurnDirection _turnDir = TurnDirection.none;
@@ -114,7 +115,9 @@ class _RealisticPageCurlState extends State<RealisticPageCurl>
       _dragProgress = 0.0;
       _curlProgressNotifier.value = 0.0;
       _getCachedPage(_currentPage);
-      final target = _turnDir == TurnDirection.forward ? _currentPage + 1 : _currentPage - 1;
+      final target = _turnDir == TurnDirection.forward
+          ? _currentPage + 1
+          : _currentPage - 1;
       _getCachedPage(target);
       setState(() {});
     }
@@ -164,11 +167,12 @@ class _RealisticPageCurlState extends State<RealisticPageCurl>
     );
 
     _animController.reset();
-    final listener = () {
+    void listener() {
       if (_progressAnim != null) {
         _curlProgressNotifier.value = _progressAnim!.value;
       }
-    };
+    }
+
     _animController.addListener(listener);
 
     _animController.forward().then((_) {
@@ -196,8 +200,10 @@ class _RealisticPageCurlState extends State<RealisticPageCurl>
   bool _isHardCover(int index, TurnDirection dir) {
     if (index == 0 && dir == TurnDirection.forward) return true;
     if (index == 1 && dir == TurnDirection.backward) return true;
-    if (index == widget.pageCount - 2 && dir == TurnDirection.forward) return true;
-    if (index == widget.pageCount - 1 && dir == TurnDirection.backward) return true;
+    if (index == widget.pageCount - 2 && dir == TurnDirection.forward)
+      return true;
+    if (index == widget.pageCount - 1 && dir == TurnDirection.backward)
+      return true;
     return false;
   }
 
@@ -229,9 +235,8 @@ class _RealisticPageCurlState extends State<RealisticPageCurl>
 
   Widget _buildActiveTurn(Size size) {
     final isCover = _isHardCover(_currentPage, _turnDir);
-    final targetPage = _turnDir == TurnDirection.forward
-        ? _currentPage + 1
-        : _currentPage - 1;
+    final targetPage =
+        _turnDir == TurnDirection.forward ? _currentPage + 1 : _currentPage - 1;
 
     final currWidget = _getCachedPage(_currentPage);
     final targetWidget = _getCachedPage(targetPage);
@@ -240,14 +245,16 @@ class _RealisticPageCurlState extends State<RealisticPageCurl>
       return ValueListenableBuilder<double>(
         valueListenable: _curlProgressNotifier,
         builder: (context, progress, _) {
-          return _buildHardCoverAnimation(size, targetPage, progress, currWidget, targetWidget);
+          return _buildHardCoverAnimation(
+              size, targetPage, progress, currWidget, targetWidget);
         },
       );
     } else {
       return ValueListenableBuilder<double>(
         valueListenable: _curlProgressNotifier,
         builder: (context, progress, _) {
-          return _buildSoftPaperCurl(size, targetPage, progress, currWidget, targetWidget);
+          return _buildSoftPaperCurl(
+              size, targetPage, progress, currWidget, targetWidget);
         },
       );
     }
@@ -265,25 +272,27 @@ class _RealisticPageCurlState extends State<RealisticPageCurl>
   ) {
     final isForward = _turnDir == TurnDirection.forward;
     // Positive angle rotates Z towards viewer (pops outward in front of book)
-    final angle = isForward
-        ? progress * math.pi
-        : (1.0 - progress) * math.pi;
+    final angle = isForward ? progress * math.pi : (1.0 - progress) * math.pi;
 
     return Stack(
       fit: StackFit.expand,
       children: [
         targetWidget,
-
         if (progress > 0.05 && progress < 0.95)
           Positioned.fill(
             child: IgnorePointer(
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    begin: isForward ? Alignment.centerLeft : Alignment.centerRight,
-                    end: isForward ? Alignment.centerRight : Alignment.centerLeft,
+                    begin: isForward
+                        ? Alignment.centerLeft
+                        : Alignment.centerRight,
+                    end: isForward
+                        ? Alignment.centerRight
+                        : Alignment.centerLeft,
                     colors: [
-                      Color.fromRGBO(0, 0, 0, (math.sin(progress * math.pi) * 0.4)),
+                      Color.fromRGBO(
+                          0, 0, 0, (math.sin(progress * math.pi) * 0.4)),
                       Colors.transparent,
                     ],
                     stops: const [0.0, 0.4],
@@ -292,7 +301,6 @@ class _RealisticPageCurlState extends State<RealisticPageCurl>
               ),
             ),
           ),
-
         Transform(
           alignment: Alignment.centerLeft,
           transform: Matrix4.identity()
@@ -316,15 +324,13 @@ class _RealisticPageCurlState extends State<RealisticPageCurl>
   ) {
     final isForward = _turnDir == TurnDirection.forward;
     final touchY = _touchStart.dy;
-    final touchYNorm = (size.height > 0)
-        ? (touchY / size.height).clamp(0.05, 0.95)
-        : 0.5;
+    final touchYNorm =
+        (size.height > 0) ? (touchY / size.height).clamp(0.05, 0.95) : 0.5;
 
     final tiltAngle = (touchYNorm - 0.5) * 0.45 * (1.0 - progress);
 
-    final foldX = isForward
-        ? size.width * (1.0 - progress)
-        : size.width * progress;
+    final foldX =
+        isForward ? size.width * (1.0 - progress) : size.width * progress;
 
     final curlRadius = math.sin(progress * math.pi) * 24.0 + 4.0;
 
@@ -384,14 +390,14 @@ class _RealisticPageCurlState extends State<RealisticPageCurl>
           child,
 
           // --- BOOK SPINE BOUNDARY & INNER GUTTER SHADOW ---
-          Positioned(
+          const Positioned(
             left: 0,
             top: 0,
             bottom: 0,
             width: 24,
             child: IgnorePointer(
               child: DecoratedBox(
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.centerLeft,
                     end: Alignment.centerRight,
@@ -414,14 +420,14 @@ class _RealisticPageCurlState extends State<RealisticPageCurl>
           ),
 
           // --- OUTER BOOK BLOCK TRIM (Right open-leaf edge) ---
-          Positioned(
+          const Positioned(
             right: 0,
             top: 0,
             bottom: 0,
             width: 3,
             child: IgnorePointer(
               child: DecoratedBox(
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   color: Color(0x10000000),
                   border: Border(
                     right: BorderSide(
@@ -554,7 +560,8 @@ class _UnifiedCurlShadingPainter extends CustomPainter {
     canvas.drawRect(creaseRect, creasePaint);
 
     // 3. Lifted reverse paper flap
-    final flapWidth = math.min(size.width * progress * 0.75, math.pi * curlRadius * 2.2);
+    final flapWidth =
+        math.min(size.width * progress * 0.75, math.pi * curlRadius * 2.2);
     if (flapWidth > 1.0) {
       final flapRect = Rect.fromLTWH(
         isForward ? foldX - flapWidth : foldX,

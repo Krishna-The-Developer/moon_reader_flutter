@@ -39,7 +39,9 @@ class ShelfBookItem extends StatelessWidget {
         borderRadius: BorderRadius.circular(4),
         boxShadow: [
           BoxShadow(
-            color: isHighlighted ? Colors.amber.withOpacity(0.7) : Colors.black87,
+            color: isHighlighted
+                ? Colors.amber.withValues(alpha: 0.7)
+                : Colors.black87,
             blurRadius: isHighlighted ? 14 : 7,
             offset: const Offset(3, 6),
           ),
@@ -62,7 +64,11 @@ class ShelfBookItem extends StatelessWidget {
               child: Container(
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [Colors.black54, Colors.white10, Colors.transparent],
+                    colors: [
+                      Colors.black54,
+                      Colors.white10,
+                      Colors.transparent
+                    ],
                   ),
                 ),
               ),
@@ -81,7 +87,9 @@ class ShelfBookItem extends StatelessWidget {
       decoration: BoxDecoration(
         color: _getSpineColor(book.title),
         borderRadius: BorderRadius.circular(3),
-        boxShadow: const [BoxShadow(color: Colors.black45, blurRadius: 4, offset: Offset(2, 3))],
+        boxShadow: const [
+          BoxShadow(color: Colors.black45, blurRadius: 4, offset: Offset(2, 3))
+        ],
       ),
       child: Stack(
         children: [
@@ -103,8 +111,16 @@ class ShelfBookItem extends StatelessWidget {
               ),
             ),
           ),
-          Positioned(top: 14, left: 0, right: 0, child: Container(height: 1.5, color: Colors.black38)),
-          Positioned(bottom: 14, left: 0, right: 0, child: Container(height: 1.5, color: Colors.black38)),
+          Positioned(
+              top: 14,
+              left: 0,
+              right: 0,
+              child: Container(height: 1.5, color: Colors.black38)),
+          Positioned(
+              bottom: 14,
+              left: 0,
+              right: 0,
+              child: Container(height: 1.5, color: Colors.black38)),
         ],
       ),
     );
@@ -119,7 +135,8 @@ class ShelfBookItem extends StatelessWidget {
         children: [
           Text(
             book.format.toUpperCase(),
-            style: const TextStyle(color: Colors.amber, fontSize: 10, fontWeight: FontWeight.bold),
+            style: const TextStyle(
+                color: Colors.amber, fontSize: 10, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 6),
           Text(
@@ -127,7 +144,8 @@ class ShelfBookItem extends StatelessWidget {
             maxLines: 3,
             textAlign: TextAlign.center,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+            style: const TextStyle(
+                color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 4),
           Text(
