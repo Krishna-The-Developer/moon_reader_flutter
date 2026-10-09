@@ -1,17 +1,11 @@
-# moon_reader_flutter
+# AK reader
 
-A new Flutter project.
+An advanced, high-performance Flutter document reader designed for authentic physical-book reading aesthetics with dynamic 3D page curl physics, progressive document loading, and OCR page scanning.
 
-## Getting Started
-
-This project is a starting point for a Flutter application.
-
-A few resources to get you started if this is your first Flutter project:
-
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Features
+- Realistic 3D page curl physics (60 FPS) with touch-point fold deformation
+- Progressive document loading with bounded LRU cache (eliminates OOM on 500+ page books)
+- Warm cream paper reading experience (#F5EACB) with dark book-ink typography
+- Universal multi-format support (PDF, EPUB, CBZ, TXT)
+- Physical page scanning & layout reconstruction via Google ML Kit OCR
+- Full Android 11+ Scoped Storage (SAF) compliance

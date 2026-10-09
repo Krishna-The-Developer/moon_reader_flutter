@@ -6,3 +6,11 @@ build/
 android/local.properties
 android/.gradle/
 *.log
+
+# Additional cleanups
+*.py
+*.pyc
+__pycache__/
+*.log
+.DS_Store
+Thumbs.db

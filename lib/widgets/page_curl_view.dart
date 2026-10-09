@@ -200,10 +200,12 @@ class _RealisticPageCurlState extends State<RealisticPageCurl>
   bool _isHardCover(int index, TurnDirection dir) {
     if (index == 0 && dir == TurnDirection.forward) return true;
     if (index == 1 && dir == TurnDirection.backward) return true;
-    if (index == widget.pageCount - 2 && dir == TurnDirection.forward)
+    if (index == widget.pageCount - 2 && dir == TurnDirection.forward) {
       return true;
-    if (index == widget.pageCount - 1 && dir == TurnDirection.backward)
+    }
+    if (index == widget.pageCount - 1 && dir == TurnDirection.backward) {
       return true;
+    }
     return false;
   }
 

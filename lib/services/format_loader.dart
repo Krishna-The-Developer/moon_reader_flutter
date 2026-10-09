@@ -22,13 +22,12 @@ class FormatLoader {
     final file = File(path);
     if (!await file.exists()) {
       return ParsedBookContent(
-        textChunks: ["File not found: $path"],
+        textChunks: ["File not found at path: $path"],
         imagePages: [],
         isImageBook: false,
       );
     }
 
-    // Normalize format string (.epub, EPUB, epub -> epub)
     String fmt = format.toLowerCase().replaceAll('.', '').trim();
     if (fmt.isEmpty) {
       fmt = path.split('.').last.toLowerCase().replaceAll('.', '').trim();
@@ -45,7 +44,7 @@ class FormatLoader {
     }
   }
 
-  // 1. PDF via native PDFX visual rendering
+  // 1. PDF via native visual rendering
   static Future<ParsedBookContent> _loadPdf(File file) async {
     try {
       final document = await PdfDocument.openFile(file.path);
@@ -75,13 +74,13 @@ class FormatLoader {
     }
 
     return ParsedBookContent(
-      textChunks: ["Failed to render PDF: ${file.uri.pathSegments.last}"],
+      textChunks: ["Could not render PDF document."],
       imagePages: [],
       isImageBook: false,
     );
   }
 
-  // 2. CBZ / Comic Archive with Natural Sorting & Metadata Filtering
+  // 2. CBZ / Comic with Stream-Safe Byte Extraction
   static Future<ParsedBookContent> _loadCbz(File file) async {
     try {
       final bytes = await file.readAsBytes();
@@ -96,16 +95,22 @@ class FormatLoader {
             (n.endsWith('.jpg') ||
                 n.endsWith('.png') ||
                 n.endsWith('.webp') ||
-                n.endsWith('.jpeg'));
+                n.endsWith('.jpeg') ||
+                n.endsWith('.gif'));
       }).toList();
 
-      // Natural alphanumeric sort (page2 comes before page10)
       files.sort((a, b) => _naturalCompare(a.name, b.name));
 
       for (final f in files) {
-        final dynamic content = f.content;
-        if (content is List<int> && content.isNotEmpty) {
-          images.add(Uint8List.fromList(content));
+        Uint8List? imgBytes;
+        if (f.content is List<int>) {
+          imgBytes = Uint8List.fromList(f.content as List<int>);
+        } else if (f.rawContent != null) {
+          imgBytes = f.rawContent!.toUint8List();
+        }
+
+        if (imgBytes != null && imgBytes.isNotEmpty) {
+          images.add(imgBytes);
         }
       }
 
@@ -118,24 +123,26 @@ class FormatLoader {
     }
 
     return ParsedBookContent(
-      textChunks: ["Could not extract images from comic archive."],
+      textChunks: ["Comic archive does not contain readable images."],
       imagePages: [],
       isImageBook: false,
     );
   }
 
-  // 3. EPUB with recursive chapter traversal & HTML spine fallback
+  // 3. EPUB with Primary Parser + Raw ZIP Extraction Fallback
   static Future<ParsedBookContent> _loadEpub(File file) async {
+    final List<String> chunks = [];
+    final bytes = await file.readAsBytes();
+
+    // Primary: epubx package parsing
     try {
-      final bytes = await file.readAsBytes();
       final book = await epub.EpubReader.readBook(bytes);
-      final List<String> chunks = [];
 
       void extractChapter(epub.EpubChapter chap) {
         final html = chap.HtmlContent ?? '';
-        final plain = _stripHtml(html);
+        final plain = _cleanHtmlPreservingParagraphs(html);
         if (plain.isNotEmpty) {
-          _splitIntoChunks(plain, chunks);
+          _smartChunkText(plain, chunks);
         }
         for (final sub in chap.SubChapters ?? []) {
           extractChapter(sub);
@@ -146,32 +153,69 @@ class FormatLoader {
         extractChapter(chap);
       }
 
-      // If chapter tree had no text, fall back to complete HTML spine
       if (chunks.isEmpty && book.Content?.Html != null) {
-        for (final htmlFile in book.Content!.Html!.values) {
-          final plain = _stripHtml(htmlFile.Content ?? '');
+        final htmlFiles = book.Content!.Html!.values.toList();
+        for (final hf in htmlFiles) {
+          final plain = _cleanHtmlPreservingParagraphs(hf.Content ?? '');
           if (plain.isNotEmpty) {
-            _splitIntoChunks(plain, chunks);
+            _smartChunkText(plain, chunks);
           }
         }
       }
-
-      if (chunks.isNotEmpty) {
-        return ParsedBookContent(
-            textChunks: chunks, imagePages: [], isImageBook: false);
-      }
     } catch (e) {
-      debugPrint("EPUB Load Error: $e");
+      debugPrint("epubx failed, switching to raw zip fallback: $e");
+    }
+
+    // Fallback: Direct Zip extraction for non-standard/complex EPUBs
+    if (chunks.isEmpty) {
+      try {
+        final archive = ZipDecoder().decodeBytes(bytes);
+        final htmlFiles = archive.files.where((f) {
+          final n = f.name.toLowerCase();
+          return f.isFile &&
+              (n.endsWith('.xhtml') ||
+                  n.endsWith('.html') ||
+                  n.endsWith('.htm')) &&
+              !n.contains('toc') &&
+              !n.contains('nav');
+        }).toList();
+
+        htmlFiles.sort((a, b) => _naturalCompare(a.name, b.name));
+
+        for (final f in htmlFiles) {
+          String rawHtml = "";
+          if (f.content is List<int>) {
+            rawHtml = utf8.decode(f.content as List<int>, allowMalformed: true);
+          } else if (f.rawContent != null) {
+            rawHtml =
+                utf8.decode(f.rawContent!.toUint8List(), allowMalformed: true);
+          }
+
+          final plain = _cleanHtmlPreservingParagraphs(rawHtml);
+          if (plain.isNotEmpty) {
+            _smartChunkText(plain, chunks);
+          }
+        }
+      } catch (e) {
+        debugPrint("Raw EPUB Zip fallback error: $e");
+      }
+    }
+
+    if (chunks.isNotEmpty) {
+      return ParsedBookContent(
+          textChunks: chunks, imagePages: [], isImageBook: false);
     }
 
     return ParsedBookContent(
-      textChunks: ["Unable to extract readable text from this EPUB file."],
+      textChunks: [
+        "Unable to read text from this EPUB book. The file may be DRM-protected or corrupted."
+      ],
       imagePages: [],
       isImageBook: false,
     );
   }
 
-  // 4. Plain Text (UTF-8, Latin-1, ASCII)
+  // 4. TXT with Multi-Encoding Safety
   static Future<ParsedBookContent> _loadTxt(File file) async {
     try {
       final bytes = await file.readAsBytes();
@@ -187,8 +231,8 @@ class FormatLoader {
       }
 
       final List<String> chunks = [];
-      _splitIntoChunks(text, chunks);
-      if (chunks.isEmpty) chunks.add("Empty text document.");
+      _smartChunkText(text, chunks);
+      if (chunks.isEmpty) chunks.add("Empty document.");
 
       return ParsedBookContent(
           textChunks: chunks, imagePages: [], isImageBook: false);
@@ -201,31 +245,66 @@ class FormatLoader {
     }
   }
 
-  static String _stripHtml(String html) {
+  // --- HTML Cleaning with Paragraph & Heading Preservation ---
+  static String _cleanHtmlPreservingParagraphs(String html) {
+    if (html.isEmpty) return "";
+
     return html
         .replaceAll(
             RegExp(r'<style[^>]*>[\s\S]*?</style>', caseSensitive: false), '')
         .replaceAll(
             RegExp(r'<script[^>]*>[\s\S]*?</script>', caseSensitive: false), '')
+        .replaceAll(
+            RegExp(r'</(p|div|h[1-6]|li|tr)>', caseSensitive: false), '\n\n')
+        .replaceAll(RegExp(r'<(br|hr)[^>]*>', caseSensitive: false), '\n')
         .replaceAll(RegExp(r'<[^>]*>'), ' ')
         .replaceAll('&nbsp;', ' ')
         .replaceAll('&amp;', '&')
         .replaceAll('&quot;', '"')
         .replaceAll('&apos;', "'")
+        .replaceAll('&#39;', "'")
         .replaceAll('&lt;', '<')
         .replaceAll('&gt;', '>')
-        .replaceAll(RegExp(r'\s+'), ' ')
+        .replaceAll('&mdash;', '—')
+        .replaceAll('&ndash;', '–')
+        .replaceAll('&hellip;', '…')
+        .replaceAll(RegExp(r'[ \t]+'), ' ')
+        .replaceAll(RegExp(r'\n{3,}'), '\n\n')
         .trim();
   }
 
-  static void _splitIntoChunks(String text, List<String> targetList) {
-    const chunkSize = 550; // Optimized size for single-page reading
-    for (int i = 0; i < text.length; i += chunkSize) {
-      final end = (i + chunkSize < text.length) ? i + chunkSize : text.length;
-      final part = text.substring(i, end).trim();
-      if (part.isNotEmpty) {
-        targetList.add(part);
+  // --- Smart Chunking: Never cuts words in half, balances page height ---
+  static void _smartChunkText(String text, List<String> targetList) {
+    const targetLength = 680;
+    int start = 0;
+
+    while (start < text.length) {
+      if (start + targetLength >= text.length) {
+        final remaining = text.substring(start).trim();
+        if (remaining.isNotEmpty) targetList.add(remaining);
+        break;
       }
+
+      int end = start + targetLength;
+      // Search for paragraph break first
+      int breakIndex = text.lastIndexOf('\n\n', end);
+      if (breakIndex <= start + 250) {
+        // Search for sentence end
+        breakIndex = text.lastIndexOf(RegExp(r'[.!?]\s'), end);
+      }
+      if (breakIndex <= start + 200) {
+        // Search for space (word boundary)
+        breakIndex = text.lastIndexOf(' ', end);
+      }
+      if (breakIndex <= start) {
+        breakIndex = end;
+      }
+
+      final chunk = text.substring(start, breakIndex).trim();
+      if (chunk.isNotEmpty) {
+        targetList.add(chunk);
+      }
+      start = breakIndex + 1;
     }
   }
 
