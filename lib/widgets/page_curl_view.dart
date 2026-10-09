@@ -1,41 +1,38 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
-enum TurnDirection { forward, backward, none }
-
-/// Ultra-Fast Touch-Point Physical Page Curl Engine
-/// Single full-page view with authentic book spine boundary & binding edge.
 class RealisticPageCurl extends StatefulWidget {
   final int pageCount;
   final int initialPage;
+  final Widget Function(BuildContext context, int pageIndex) builder;
   final ValueChanged<int> onPageChanged;
-  final IndexedWidgetBuilder builder;
+  final Color paperColor;
+  final bool enablePaperTransparency;
 
   const RealisticPageCurl({
     super.key,
     required this.pageCount,
     required this.initialPage,
-    required this.onPageChanged,
     required this.builder,
+    required this.onPageChanged,
+    this.paperColor = const Color(0xFFF5EACB),
+    this.enablePaperTransparency = true,
   });
 
   @override
   State<RealisticPageCurl> createState() => _RealisticPageCurlState();
 }
 
+// Backward-compatibility alias
+typedef PageCurlView = RealisticPageCurl;
+
 class _RealisticPageCurlState extends State<RealisticPageCurl>
     with SingleTickerProviderStateMixin {
-  late int _currentPage;
   late AnimationController _animController;
-  Animation<double>? _progressAnim;
-
-  final ValueNotifier<double> _curlProgressNotifier =
-      ValueNotifier<double>(0.0);
-  final Map<int, Widget> _pageWidgetCache = {};
-
-  TurnDirection _turnDir = TurnDirection.none;
-  Offset _touchStart = Offset.zero;
+  late int _currentPage;
   double _dragProgress = 0.0;
+  bool _isForward = true;
+  bool _isDragging = false;
 
   @override
   void initState() {
@@ -43,16 +40,38 @@ class _RealisticPageCurlState extends State<RealisticPageCurl>
     _currentPage = widget.initialPage;
     _animController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 180),
-    );
+      duration: const Duration(milliseconds: 320),
+    )
+      ..addListener(() {
+        setState(() {
+          _dragProgress = _animController.value;
+        });
+      })
+      ..addStatusListener((status) {
+        if (status == AnimationStatus.completed) {
+          final nextIndex = _isForward ? _currentPage + 1 : _currentPage - 1;
+          _isDragging = false;
+          _dragProgress = 0.0;
+          _animController.reset();
+          if (nextIndex >= 0 && nextIndex < widget.pageCount) {
+            setState(() {
+              _currentPage = nextIndex;
+            });
+            widget.onPageChanged(nextIndex);
+          }
+        } else if (status == AnimationStatus.dismissed) {
+          _isDragging = false;
+          _dragProgress = 0.0;
+        }
+      });
   }
 
   @override
   void didUpdateWidget(RealisticPageCurl oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.initialPage != widget.initialPage &&
-        widget.initialPage != _currentPage) {
-      _pageWidgetCache.clear();
+    if (widget.initialPage != _currentPage &&
+        !_isDragging &&
+        !_animController.isAnimating) {
       setState(() {
         _currentPage = widget.initialPage;
       });
@@ -62,543 +81,310 @@ class _RealisticPageCurlState extends State<RealisticPageCurl>
   @override
   void dispose() {
     _animController.dispose();
-    _curlProgressNotifier.dispose();
     super.dispose();
   }
 
-  Widget _getCachedPage(int index) {
-    if (!_pageWidgetCache.containsKey(index)) {
-      final isCover = index == 0 || index == widget.pageCount - 1;
-      _pageWidgetCache[index] = RepaintBoundary(
-        child: _buildPaperWrapper(
-          widget.builder(context, index),
-          isCover: isCover,
-        ),
-      );
-    }
-    return _pageWidgetCache[index]!;
-  }
-
-  void _pruneCache() {
-    final needed = {_currentPage - 1, _currentPage, _currentPage + 1};
-    _pageWidgetCache.removeWhere((idx, _) => !needed.contains(idx));
-  }
-
-  void _onPanStart(DragStartDetails details) {
+  void _onHorizontalDragStart(DragStartDetails details) {
     if (_animController.isAnimating) return;
-    final size = context.size ?? Size.zero;
-    if (size.width == 0 || size.height == 0) return;
+    final width = MediaQuery.of(context).size.width;
+    final touchX = details.localPosition.dx;
 
-    final pos = details.localPosition;
-    _touchStart = pos;
-
-    // Forward: Right-to-Left (touch on right side)
-    if (pos.dx >= size.width * 0.42) {
+    if (touchX > width * 0.5) {
       if (_currentPage < widget.pageCount - 1) {
-        _turnDir = TurnDirection.forward;
-      } else {
-        _turnDir = TurnDirection.none;
-      }
-    }
-    // Backward: Left-to-Right (touch on left side)
-    else if (pos.dx <= size.width * 0.58) {
-      if (_currentPage > 0) {
-        _turnDir = TurnDirection.backward;
-      } else {
-        _turnDir = TurnDirection.none;
+        _isForward = true;
+        _isDragging = true;
+        _dragProgress = 0.0;
       }
     } else {
-      _turnDir = TurnDirection.none;
-    }
-
-    if (_turnDir != TurnDirection.none) {
-      _dragProgress = 0.0;
-      _curlProgressNotifier.value = 0.0;
-      _getCachedPage(_currentPage);
-      final target = _turnDir == TurnDirection.forward
-          ? _currentPage + 1
-          : _currentPage - 1;
-      _getCachedPage(target);
-      setState(() {});
+      if (_currentPage > 0) {
+        _isForward = false;
+        _isDragging = true;
+        _dragProgress = 0.0;
+      }
     }
   }
 
-  void _onPanUpdate(DragUpdateDetails details) {
-    if (_turnDir == TurnDirection.none || _animController.isAnimating) return;
-    final size = context.size ?? Size.zero;
-    if (size.width == 0) return;
+  void _onHorizontalDragUpdate(DragUpdateDetails details) {
+    if (!_isDragging) return;
+    final width = MediaQuery.of(context).size.width;
+    final delta = details.primaryDelta ?? 0.0;
 
-    final curX = details.localPosition.dx;
-    double progress = 0.0;
-
-    if (_turnDir == TurnDirection.forward) {
-      final deltaX = _touchStart.dx - curX;
-      progress = (deltaX / (size.width * 0.85)).clamp(0.0, 1.0);
-    } else if (_turnDir == TurnDirection.backward) {
-      final deltaX = curX - _touchStart.dx;
-      progress = (deltaX / (size.width * 0.85)).clamp(0.0, 1.0);
-    }
-
-    _dragProgress = progress;
-    _curlProgressNotifier.value = progress;
-  }
-
-  void _onPanEnd(DragEndDetails details) {
-    if (_turnDir == TurnDirection.none || _animController.isAnimating) return;
-    final vx = details.velocity.pixelsPerSecond.dx;
-
-    bool shouldComplete = false;
-    if (_turnDir == TurnDirection.forward) {
-      if (_dragProgress > 0.28 || vx < -280) {
-        shouldComplete = true;
-      }
-    } else if (_turnDir == TurnDirection.backward) {
-      if (_dragProgress > 0.28 || vx > 280) {
-        shouldComplete = true;
-      }
-    }
-
-    final target = shouldComplete ? 1.0 : 0.0;
-    final animMs = shouldComplete ? 180 : 130;
-    _animController.duration = Duration(milliseconds: animMs);
-
-    _progressAnim = Tween<double>(begin: _dragProgress, end: target).animate(
-      CurvedAnimation(parent: _animController, curve: Curves.easeOutCubic),
-    );
-
-    _animController.reset();
-    void listener() {
-      if (_progressAnim != null) {
-        _curlProgressNotifier.value = _progressAnim!.value;
-      }
-    }
-
-    _animController.addListener(listener);
-
-    _animController.forward().then((_) {
-      _animController.removeListener(listener);
-      if (shouldComplete) {
-        final next = _turnDir == TurnDirection.forward
-            ? _currentPage + 1
-            : _currentPage - 1;
-        setState(() {
-          _currentPage = next;
-          _dragProgress = 0.0;
-          _turnDir = TurnDirection.none;
-        });
-        _pruneCache();
-        widget.onPageChanged(next);
+    setState(() {
+      if (_isForward) {
+        _dragProgress = (_dragProgress - (delta / width)).clamp(0.0, 1.0);
       } else {
-        setState(() {
-          _dragProgress = 0.0;
-          _turnDir = TurnDirection.none;
-        });
+        _dragProgress = (_dragProgress + (delta / width)).clamp(0.0, 1.0);
       }
     });
   }
 
-  bool _isHardCover(int index, TurnDirection dir) {
-    if (index == 0 && dir == TurnDirection.forward) return true;
-    if (index == 1 && dir == TurnDirection.backward) return true;
-    if (index == widget.pageCount - 2 && dir == TurnDirection.forward) {
-      return true;
+  void _onHorizontalDragEnd(DragEndDetails details) {
+    if (!_isDragging) return;
+    final velocity = details.primaryVelocity ?? 0.0;
+
+    if (_isForward) {
+      if (_dragProgress > 0.3 || velocity < -400) {
+        _animController.forward(from: _dragProgress);
+      } else {
+        _animController.reverse(from: _dragProgress);
+      }
+    } else {
+      if (_dragProgress > 0.3 || velocity > 400) {
+        _animController.forward(from: _dragProgress);
+      } else {
+        _animController.reverse(from: _dragProgress);
+      }
     }
-    if (index == widget.pageCount - 1 && dir == TurnDirection.backward) {
-      return true;
+  }
+
+  void _flipForward() {
+    if (_currentPage < widget.pageCount - 1 && !_animController.isAnimating) {
+      _isForward = true;
+      _isDragging = true;
+      _animController.forward(from: 0.0);
     }
-    return false;
+  }
+
+  void _flipBackward() {
+    if (_currentPage > 0 && !_animController.isAnimating) {
+      _isForward = false;
+      _isDragging = true;
+      _animController.forward(from: 0.0);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final size = Size(constraints.maxWidth, constraints.maxHeight);
+    final width = MediaQuery.of(context).size.width;
+    final height = MediaQuery.of(context).size.height;
 
-        return GestureDetector(
-          onPanStart: _onPanStart,
-          onPanUpdate: _onPanUpdate,
-          onPanEnd: _onPanEnd,
-          behavior: HitTestBehavior.opaque,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              // Single full page when not actively turning
-              if (_turnDir == TurnDirection.none)
-                _getCachedPage(_currentPage)
-              else
-                _buildActiveTurn(size),
-            ],
-          ),
-        );
+    return GestureDetector(
+      onHorizontalDragStart: _onHorizontalDragStart,
+      onHorizontalDragUpdate: _onHorizontalDragUpdate,
+      onHorizontalDragEnd: _onHorizontalDragEnd,
+      onTapUp: (details) {
+        if (details.localPosition.dx > width * 0.75) {
+          _flipForward();
+        } else if (details.localPosition.dx < width * 0.25) {
+          _flipBackward();
+        }
       },
-    );
-  }
-
-  Widget _buildActiveTurn(Size size) {
-    final isCover = _isHardCover(_currentPage, _turnDir);
-    final targetPage =
-        _turnDir == TurnDirection.forward ? _currentPage + 1 : _currentPage - 1;
-
-    final currWidget = _getCachedPage(_currentPage);
-    final targetWidget = _getCachedPage(targetPage);
-
-    if (isCover) {
-      return ValueListenableBuilder<double>(
-        valueListenable: _curlProgressNotifier,
-        builder: (context, progress, _) {
-          return _buildHardCoverAnimation(
-              size, targetPage, progress, currWidget, targetWidget);
-        },
-      );
-    } else {
-      return ValueListenableBuilder<double>(
-        valueListenable: _curlProgressNotifier,
-        builder: (context, progress, _) {
-          return _buildSoftPaperCurl(
-              size, targetPage, progress, currWidget, targetWidget);
-        },
-      );
-    }
-  }
-
-  // =========================================================================
-  // 1. HARD COVER (Rigid Hinge at Book Spine, Board Bevel Depth)
-  // =========================================================================
-  Widget _buildHardCoverAnimation(
-    Size size,
-    int targetPage,
-    double progress,
-    Widget currWidget,
-    Widget targetWidget,
-  ) {
-    final isForward = _turnDir == TurnDirection.forward;
-    // Positive angle rotates Z towards viewer (pops outward in front of book)
-    final angle = isForward ? progress * math.pi : (1.0 - progress) * math.pi;
-
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        targetWidget,
-        if (progress > 0.05 && progress < 0.95)
-          Positioned.fill(
-            child: IgnorePointer(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: isForward
-                        ? Alignment.centerLeft
-                        : Alignment.centerRight,
-                    end: isForward
-                        ? Alignment.centerRight
-                        : Alignment.centerLeft,
-                    colors: [
-                      Color.fromRGBO(
-                          0, 0, 0, (math.sin(progress * math.pi) * 0.4)),
-                      Colors.transparent,
-                    ],
-                    stops: const [0.0, 0.4],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        Transform(
-          alignment: Alignment.centerLeft,
-          transform: Matrix4.identity()
-            ..setEntry(3, 2, 0.0009)
-            ..rotateY(angle),
-          child: currWidget,
-        ),
-      ],
-    );
-  }
-
-  // =========================================================================
-  // 2. SOFT PAPER CURL (Exposing Underlying Page ONLY in the Peeled Region)
-  // =========================================================================
-  Widget _buildSoftPaperCurl(
-    Size size,
-    int targetPage,
-    double progress,
-    Widget currWidget,
-    Widget targetWidget,
-  ) {
-    final isForward = _turnDir == TurnDirection.forward;
-    final touchY = _touchStart.dy;
-    final touchYNorm =
-        (size.height > 0) ? (touchY / size.height).clamp(0.05, 0.95) : 0.5;
-
-    final tiltAngle = (touchYNorm - 0.5) * 0.45 * (1.0 - progress);
-
-    final foldX =
-        isForward ? size.width * (1.0 - progress) : size.width * progress;
-
-    final curlRadius = math.sin(progress * math.pi) * 24.0 + 4.0;
-
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        // Layer 1: Destination page revealed underneath the peel
-        targetWidget,
-
-        // Layer 2: Current unpeeled page surface
-        ClipPath(
-          clipper: _FastPaperClipper(
-            foldX: foldX,
-            tiltAngle: tiltAngle,
-            touchY: touchY,
-            isForward: isForward,
-          ),
-          child: currWidget,
-        ),
-
-        // Layer 3: Consolidated paper curl shading (Drop shadow, highlight & flap)
-        RepaintBoundary(
-          child: CustomPaint(
-            painter: _UnifiedCurlShadingPainter(
-              foldX: foldX,
-              tiltAngle: tiltAngle,
-              curlRadius: curlRadius,
-              touchY: touchY,
-              isForward: isForward,
-              progress: progress,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  // =========================================================================
-  // 3. PHYSICAL BOOK PAPER WRAPPER WITH DISTINCT SPINE BOUNDARY
-  // =========================================================================
-  Widget _buildPaperWrapper(Widget child, {bool isCover = false}) {
-    if (isCover) {
-      return Container(
-        decoration: BoxDecoration(
-          color: const Color(0xFF2C1A10),
-          border: Border.all(color: const Color(0xFFC49746), width: 1.5),
-        ),
-        child: child,
-      );
-    }
-
-    return Container(
-      color: const Color(0xFFF6F1E5), // Tasteful warm book paper
       child: Stack(
         fit: StackFit.expand,
         children: [
-          child,
-
-          // --- BOOK SPINE BOUNDARY & INNER GUTTER SHADOW ---
-          const Positioned(
-            left: 0,
-            top: 0,
-            bottom: 0,
-            width: 24,
-            child: IgnorePointer(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
-                    colors: [
-                      Color(0x3D000000), // Deep spine gutter crease
-                      Color(0x18000000), // Mid gutter transition
-                      Colors.transparent, // Page face
-                    ],
-                    stops: [0.0, 0.40, 1.0],
-                  ),
-                  border: Border(
-                    left: BorderSide(
-                      color: Color(0x553E2723), // Book spine binding seam
-                      width: 1.8,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-
-          // --- OUTER BOOK BLOCK TRIM (Right open-leaf edge) ---
-          const Positioned(
-            right: 0,
-            top: 0,
-            bottom: 0,
-            width: 3,
-            child: IgnorePointer(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: Color(0x10000000),
-                  border: Border(
-                    right: BorderSide(
-                      color: Color(0x20000000),
-                      width: 1.0,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
+          if (!_isDragging)
+            widget.builder(context, _currentPage)
+          else ...[
+            if (_isForward)
+              _buildForwardLayers(context, width, height)
+            else
+              _buildBackwardLayers(context, width, height),
+          ],
         ],
       ),
     );
   }
+
+  Widget _buildForwardLayers(BuildContext context, double w, double h) {
+    final nextPageIndex = _currentPage + 1;
+    final foldX = w * (1.0 - _dragProgress);
+    final flapWidth = math.min(w * 0.28, (w - foldX) * 0.6);
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        // 1. Destination Page (N+1) revealed underneath
+        ClipRect(
+          clipper: _RectClipper(Rect.fromLTRB(foldX, 0, w, h)),
+          child: widget.builder(context, nextPageIndex),
+        ),
+
+        // Drop shadow onto Destination Page
+        Positioned(
+          left: foldX,
+          top: 0,
+          width: math.min(28.0, w - foldX),
+          height: h,
+          child: IgnorePointer(
+            child: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Color(0x42000000), // 26% black
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+
+        // 2. Source Page (N) unpeeled region
+        ClipRect(
+          clipper: _RectClipper(Rect.fromLTRB(0, 0, foldX, h)),
+          child: widget.builder(context, _currentPage),
+        ),
+
+        // Crease shadow on Source Page
+        Positioned(
+          left: math.max(0.0, foldX - 16.0),
+          top: 0,
+          width: 16.0,
+          height: h,
+          child: IgnorePointer(
+            child: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.transparent,
+                    Color(0x29000000), // 16% black
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+
+        // 3. Dynamic Curled Flap (Back of Page N)
+        if (flapWidth > 1.0)
+          Positioned(
+            left: foldX - flapWidth,
+            top: 0,
+            width: flapWidth,
+            height: h,
+            child: ClipRect(
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  // Opaque paper base to prevent background bleeding
+                  Container(
+                    color: widget.paperColor.withAlpha(250),
+                  ),
+
+                  // Subtle ink show-through (Clean X-flip via setEntry, zero deprecation)
+                  if (widget.enablePaperTransparency)
+                    Opacity(
+                      opacity: 0.04,
+                      child: Transform(
+                        alignment: Alignment.center,
+                        transform: Matrix4.identity()..setEntry(0, 0, -1.0),
+                        child: widget.builder(context, _currentPage),
+                      ),
+                    ),
+
+                  // Dynamic curl lighting gradient
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          const Color(0x33000000), // 20% black
+                          const Color(0x4DFFFFFF), // 30% white
+                          widget.paperColor,
+                        ],
+                        stops: const [0.0, 0.35, 1.0],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildBackwardLayers(BuildContext context, double w, double h) {
+    final prevPageIndex = _currentPage - 1;
+    final foldX = w * _dragProgress;
+    final flapWidth = math.min(w * 0.28, foldX * 0.6);
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        // 1. Current Page (N) stationary underneath
+        ClipRect(
+          clipper: _RectClipper(Rect.fromLTRB(foldX, 0, w, h)),
+          child: widget.builder(context, _currentPage),
+        ),
+
+        // Drop shadow onto Current Page
+        Positioned(
+          left: foldX,
+          top: 0,
+          width: math.min(28.0, w - foldX),
+          height: h,
+          child: IgnorePointer(
+            child: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Color(0x42000000), // 26% black
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+
+        // 2. Previous Page (N-1) peeled in from left
+        ClipRect(
+          clipper: _RectClipper(
+              Rect.fromLTRB(0, 0, math.max(0.0, foldX - flapWidth), h)),
+          child: widget.builder(context, prevPageIndex),
+        ),
+
+        // 3. Backward Curled Flap
+        if (flapWidth > 1.0)
+          Positioned(
+            left: foldX - flapWidth,
+            top: 0,
+            width: flapWidth,
+            height: h,
+            child: ClipRect(
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Container(
+                    color: widget.paperColor.withAlpha(250),
+                  ),
+                  if (widget.enablePaperTransparency)
+                    Opacity(
+                      opacity: 0.04,
+                      child: Transform(
+                        alignment: Alignment.center,
+                        transform: Matrix4.identity()..setEntry(0, 0, -1.0),
+                        child: widget.builder(context, prevPageIndex),
+                      ),
+                    ),
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          widget.paperColor,
+                          const Color(0x4DFFFFFF),
+                          const Color(0x33000000),
+                        ],
+                        stops: const [0.0, 0.65, 1.0],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
 }
 
-class _FastPaperClipper extends CustomClipper<Path> {
-  final double foldX;
-  final double tiltAngle;
-  final double touchY;
-  final bool isForward;
-
-  _FastPaperClipper({
-    required this.foldX,
-    required this.tiltAngle,
-    required this.touchY,
-    required this.isForward,
-  });
+class _RectClipper extends CustomClipper<Rect> {
+  final Rect clipRect;
+  _RectClipper(this.clipRect);
 
   @override
-  Path getClip(Size size) {
-    final path = Path();
-    final tanT = math.tan(tiltAngle);
-    final topX = (foldX - tanT * touchY).clamp(0.0, size.width);
-    final botX = (foldX + tanT * (size.height - touchY)).clamp(0.0, size.width);
-
-    if (isForward) {
-      path.moveTo(0, 0);
-      path.lineTo(topX, 0);
-      path.lineTo(botX, size.height);
-      path.lineTo(0, size.height);
-      path.close();
-    } else {
-      path.moveTo(topX, 0);
-      path.lineTo(size.width, 0);
-      path.lineTo(size.width, size.height);
-      path.lineTo(botX, size.height);
-      path.close();
-    }
-    return path;
-  }
+  Rect getClip(Size size) => clipRect;
 
   @override
-  bool shouldReclip(covariant _FastPaperClipper oldClipper) {
-    return oldClipper.foldX != foldX ||
-        oldClipper.tiltAngle != tiltAngle ||
-        oldClipper.isForward != isForward;
-  }
-}
-
-class _UnifiedCurlShadingPainter extends CustomPainter {
-  final double foldX;
-  final double tiltAngle;
-  final double curlRadius;
-  final double touchY;
-  final bool isForward;
-  final double progress;
-
-  _UnifiedCurlShadingPainter({
-    required this.foldX,
-    required this.tiltAngle,
-    required this.curlRadius,
-    required this.touchY,
-    required this.isForward,
-    required this.progress,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (progress <= 0.005) return;
-
-    canvas.save();
-    canvas.translate(foldX, size.height / 2);
-    canvas.rotate(tiltAngle);
-    canvas.translate(-foldX, -size.height / 2);
-
-    // 1. Under-curl drop shadow on underlying page
-    final shadowWidth = curlRadius * 2.2;
-    final shadowRect = Rect.fromLTWH(
-      isForward ? foldX : foldX - shadowWidth,
-      0,
-      shadowWidth,
-      size.height,
-    );
-    final shadowOpacity = (math.sin(progress * math.pi) * 0.45).clamp(0.0, 1.0);
-    if (shadowOpacity > 0.01) {
-      final shadowPaint = Paint()
-        ..shader = LinearGradient(
-          begin: isForward ? Alignment.centerLeft : Alignment.centerRight,
-          end: isForward ? Alignment.centerRight : Alignment.centerLeft,
-          colors: [
-            Color.fromRGBO(0, 0, 0, shadowOpacity),
-            Colors.transparent,
-          ],
-        ).createShader(shadowRect);
-      canvas.drawRect(shadowRect, shadowPaint);
-    }
-
-    // 2. Crease highlight on the curve
-    final creaseWidth = curlRadius * 1.5;
-    final creaseRect = Rect.fromLTWH(
-      isForward ? foldX - creaseWidth : foldX,
-      0,
-      creaseWidth,
-      size.height,
-    );
-    final creasePaint = Paint()
-      ..shader = LinearGradient(
-        begin: isForward ? Alignment.centerLeft : Alignment.centerRight,
-        end: isForward ? Alignment.centerRight : Alignment.centerLeft,
-        colors: const [
-          Colors.transparent,
-          Color(0x28000000),
-          Color(0x75FFFDF7),
-          Colors.transparent,
-        ],
-        stops: const [0.0, 0.45, 0.85, 1.0],
-      ).createShader(creaseRect);
-    canvas.drawRect(creaseRect, creasePaint);
-
-    // 3. Lifted reverse paper flap
-    final flapWidth =
-        math.min(size.width * progress * 0.75, math.pi * curlRadius * 2.2);
-    if (flapWidth > 1.0) {
-      final flapRect = Rect.fromLTWH(
-        isForward ? foldX - flapWidth : foldX,
-        0,
-        flapWidth,
-        size.height,
-      );
-      final flapPaint = Paint()
-        ..shader = LinearGradient(
-          begin: isForward ? Alignment.centerRight : Alignment.centerLeft,
-          end: isForward ? Alignment.centerLeft : Alignment.centerRight,
-          colors: const [
-            Color(0xFFEDE4D2),
-            Color(0xFFF7F2E7),
-            Color(0xFFE8DDC6),
-          ],
-          stops: const [0.0, 0.75, 1.0],
-        ).createShader(flapRect);
-      canvas.drawRect(flapRect, flapPaint);
-
-      final edgePaint = Paint()
-        ..color = Colors.black.withValues(alpha: 0.18)
-        ..strokeWidth = 1.0
-        ..style = PaintingStyle.stroke;
-      final edgeX = isForward ? flapRect.left : flapRect.right;
-      canvas.drawLine(Offset(edgeX, 0), Offset(edgeX, size.height), edgePaint);
-    }
-
-    canvas.restore();
-  }
-
-  @override
-  bool shouldRepaint(covariant _UnifiedCurlShadingPainter oldDelegate) {
-    return oldDelegate.progress != progress ||
-        oldDelegate.foldX != foldX ||
-        oldDelegate.tiltAngle != tiltAngle;
-  }
+  bool shouldReclip(_RectClipper oldClipper) => oldClipper.clipRect != clipRect;
 }

@@ -14,7 +14,8 @@ void main() {
       sampleTextFile = File('${tempDir.path}/sample.txt');
       final buffer = StringBuffer();
       for (int i = 0; i < 50; i++) {
-        buffer.writeln('Chapter $i\nThis is reconstructed paragraph content for chapter $i.\n\n');
+        buffer.writeln(
+            'Chapter $i\nThis is reconstructed paragraph content for chapter $i.\n\n');
       }
       await sampleTextFile.writeAsString(buffer.toString());
     });
@@ -25,7 +26,8 @@ void main() {
       }
     });
 
-    test('Stage A: Controller initializes and discovers page count rapidly', () async {
+    test('Stage A: Controller initializes and discovers page count rapidly',
+        () async {
       final controller = ProgressiveDocumentController(
         filePath: sampleTextFile.path,
         format: 'txt',
@@ -38,7 +40,8 @@ void main() {
 
       expect(controller.isInitialized, isTrue);
       expect(controller.totalPages, greaterThan(1));
-      expect(stopwatch.elapsedMilliseconds, lessThan(300), reason: "Initialization must be <300ms");
+      expect(stopwatch.elapsedMilliseconds, lessThan(300),
+          reason: "Initialization must be <300ms");
       controller.dispose();
     });
 

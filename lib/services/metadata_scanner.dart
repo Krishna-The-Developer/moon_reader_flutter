@@ -1,99 +1,210 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:archive/archive.dart';
-import 'package:epubx/epubx.dart' as epub;
-import 'package:path_provider/path_provider.dart';
 import '../models/book_model.dart';
 
 class MetadataScanner {
   static Future<LocalBook> scanAndCreateBook(File file) async {
-    final fileName = file.uri.pathSegments.last;
-    final extension = fileName.split('.').last.toLowerCase();
-    final id = DateTime.now().millisecondsSinceEpoch.toString();
+    final filePath = file.path;
+    final extension = _getExtension(filePath);
 
-    String title = _cleanTitle(fileName);
-    String author = "Local Author";
-    String? coverPath;
-
-    final appDir = await getApplicationDocumentsDirectory();
-    final coversDir = Directory('${appDir.path}/covers');
-    if (!await coversDir.exists()) {
-      await coversDir.create(recursive: true);
+    if (extension == '.epub') {
+      return await _scanEpub(file);
+    } else if (extension == '.pdf') {
+      return _scanPdf(file);
+    } else if (extension == '.cbz') {
+      return _scanCbz(file);
+    } else {
+      return _scanTxt(file);
     }
+  }
+
+  // Alias for backward compatibility
+  static Future<LocalBook> scanFile(File file) => scanAndCreateBook(file);
+
+  static Future<LocalBook> _scanEpub(File file) async {
+    String? title;
+    String? author;
 
     try {
-      if (extension == 'epub') {
-        final bytes = await file.readAsBytes();
-        final epubBook = await epub.EpubReader.readBook(bytes);
+      final bytes = await file.readAsBytes();
+      final archive = ZipDecoder().decodeBytes(bytes);
 
-        if (epubBook.Title != null && epubBook.Title!.trim().isNotEmpty) {
-          title = epubBook.Title!.trim();
+      // 1. Locate OPF file path from META-INF/container.xml
+      String opfPath = '';
+      final containerFile = archive.findFile('META-INF/container.xml');
+      if (containerFile != null) {
+        final containerXml = utf8.decode(
+          containerFile.content as List<int>,
+          allowMalformed: true,
+        );
+        final match = RegExp(
+          r'full-path\s*=\s*["\x27]([^"\x27]+)["\x27]',
+          caseSensitive: false,
+        ).firstMatch(containerXml);
+        if (match != null) {
+          opfPath = match.group(1) ?? '';
         }
-        if (epubBook.Author != null && epubBook.Author!.trim().isNotEmpty) {
-          author = epubBook.Author!.trim();
-        }
+      }
 
-        if (epubBook.Content?.Images != null &&
-            epubBook.Content!.Images!.isNotEmpty) {
-          final imagesMap = epubBook.Content!.Images!;
-          epub.EpubByteContentFile? coverEntry;
-
-          for (final key in imagesMap.keys) {
-            if (key.toLowerCase().contains('cover')) {
-              coverEntry = imagesMap[key];
-              break;
-            }
-          }
-          coverEntry ??= imagesMap.values.first;
-
-          if (coverEntry.Content != null && coverEntry.Content!.isNotEmpty) {
-            final coverFile = File('${coversDir.path}/$id.png');
-            await coverFile.writeAsBytes(coverEntry.Content!);
-            coverPath = coverFile.path;
-          }
-        }
-      } else if (extension == 'cbz') {
-        final bytes = await file.readAsBytes();
-        final archive = ZipDecoder().decodeBytes(bytes);
-
-        final imageFiles = archive.files.where((f) {
-          final n = f.name.toLowerCase();
-          return f.isFile &&
-              (n.endsWith('.jpg') ||
-                  n.endsWith('.png') ||
-                  n.endsWith('.jpeg') ||
-                  n.endsWith('.webp'));
-        }).toList()
-          ..sort((a, b) => a.name.compareTo(b.name));
-
-        if (imageFiles.isNotEmpty) {
-          final firstImage = imageFiles.first;
-          final dynamic content = firstImage.content;
-          if (content is List<int> && content.isNotEmpty) {
-            final coverFile = File('${coversDir.path}/$id.jpg');
-            await coverFile.writeAsBytes(content);
-            coverPath = coverFile.path;
+      // 2. Fallback search for any .opf file if container.xml is missing or path invalid
+      ArchiveFile? opfFile;
+      if (opfPath.isNotEmpty) {
+        opfFile = archive.findFile(opfPath);
+      }
+      if (opfFile == null) {
+        for (final f in archive.files) {
+          if (f.name.toLowerCase().endsWith('.opf')) {
+            opfFile = f;
+            break;
           }
         }
-        author = "Graphic Novel / Comic";
+      }
+
+      // 3. Parse OPF metadata section
+      if (opfFile != null) {
+        final opfContent = utf8.decode(
+          opfFile.content as List<int>,
+          allowMalformed: true,
+        );
+
+        // Extract Title (<dc:title ...>...</dc:title>)
+        final titleMatch = RegExp(
+          r'<dc:title[^>]*>([\s\S]*?)<\/dc:title>',
+          caseSensitive: false,
+        ).firstMatch(opfContent);
+        if (titleMatch != null) {
+          title = _cleanXmlText(titleMatch.group(1));
+        }
+
+        // Extract Creator / Author (<dc:creator ...>...</dc:creator>)
+        final authorMatch = RegExp(
+          r'<dc:creator[^>]*>([\s\S]*?)<\/dc:creator>',
+          caseSensitive: false,
+        ).firstMatch(opfContent);
+        if (authorMatch != null) {
+          author = _cleanXmlText(authorMatch.group(1));
+        }
       }
     } catch (_) {
-      // Fallback cleanly on corrupt archive headers
+      // Archive error handling falls back to filename
     }
 
+    final resolvedTitle = _resolveTitle(title, file.path);
+    final resolvedAuthor = (author != null && author.trim().isNotEmpty)
+        ? author.trim()
+        : 'Unknown Author';
+
     return LocalBook(
-      id: id,
-      title: title,
+      id: file.path,
+      title: resolvedTitle,
+      author: resolvedAuthor,
       filePath: file.path,
-      format: extension,
-      author: author,
-      coverPath: coverPath,
+      format: 'epub',
+      lastRead: DateTime.now(),
+      lastPage: 0,
+      totalPages: 1,
+      bookmarkedPages: [],
+      highlights: [],
     );
   }
 
-  static String _cleanTitle(String raw) {
-    String name =
-        raw.replaceAll(RegExp(r'\.[a-zA-Z0-9]+$', caseSensitive: false), '');
-    name = name.replaceAll(RegExp(r'[_+\-]'), ' ');
-    return name.trim().isEmpty ? "Untitled Book" : name.trim();
+  static LocalBook _scanPdf(File file) {
+    final title = _resolveTitle(null, file.path);
+    return LocalBook(
+      id: file.path,
+      title: title,
+      author: 'PDF Document',
+      filePath: file.path,
+      format: 'pdf',
+      lastRead: DateTime.now(),
+      lastPage: 0,
+      totalPages: 1,
+      bookmarkedPages: [],
+      highlights: [],
+    );
+  }
+
+  static LocalBook _scanCbz(File file) {
+    final title = _resolveTitle(null, file.path);
+    return LocalBook(
+      id: file.path,
+      title: title,
+      author: 'Graphic Novel',
+      filePath: file.path,
+      format: 'cbz',
+      lastRead: DateTime.now(),
+      lastPage: 0,
+      totalPages: 1,
+      bookmarkedPages: [],
+      highlights: [],
+    );
+  }
+
+  static LocalBook _scanTxt(File file) {
+    final title = _resolveTitle(null, file.path);
+    return LocalBook(
+      id: file.path,
+      title: title,
+      author: 'Plain Text',
+      filePath: file.path,
+      format: 'txt',
+      lastRead: DateTime.now(),
+      lastPage: 0,
+      totalPages: 1,
+      bookmarkedPages: [],
+      highlights: [],
+    );
+  }
+
+  static String _resolveTitle(String? rawTitle, String filePath) {
+    if (rawTitle != null && rawTitle.trim().isNotEmpty) {
+      final cleaned = rawTitle.trim();
+      if (cleaned.toLowerCase() != 'unknown') {
+        return cleaned;
+      }
+    }
+
+    // Pure Dart filename extractor (zero external package dependency)
+    final baseName = _basenameWithoutExtension(filePath);
+    final formatted = baseName
+        .replaceAll(RegExp(r'[\-_]+'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+
+    return formatted.isNotEmpty ? formatted : 'Unknown';
+  }
+
+  static String _cleanXmlText(String? raw) {
+    if (raw == null) return '';
+    return raw
+        .replaceAll(RegExp(r'<[^>]*>'), '')
+        .replaceAll('&amp;', '&')
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>')
+        .replaceAll('&quot;', '"')
+        .replaceAll('&apos;', "'")
+        .replaceAll('&#39;', "'")
+        .replaceAll(RegExp(r'[\r\n\t]+'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+  }
+
+  static String _basenameWithoutExtension(String filePath) {
+    final fileName =
+        filePath.split(Platform.pathSeparator).last.split('/').last;
+    final dotIndex = fileName.lastIndexOf('.');
+    if (dotIndex != -1) {
+      return fileName.substring(0, dotIndex);
+    }
+    return fileName;
+  }
+
+  static String _getExtension(String filePath) {
+    final dotIndex = filePath.lastIndexOf('.');
+    if (dotIndex != -1) {
+      return filePath.substring(dotIndex).toLowerCase();
+    }
+    return '';
   }
 }
